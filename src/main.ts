@@ -50,21 +50,14 @@ type ConsS = {
   cdr: S[];
 };
 
-class S {
-  private _S: AtomS | ConsS;
-  constructor(s: AtomS | ConsS) {
-    this._S = s;
-  }
+type S = AtomS | ConsS;
 
-  toString(): string {
-    switch (this._S.kind) {
-      case 'Atom':
-        return this._S.value;
-      case 'Cons':
-        return `(${this._S.car} ${this._S.cdr
-          .map((s) => s.toString())
-          .join(' ')})`;
-    }
+function StoString(s: S): string {
+  switch (s.kind) {
+    case 'Atom':
+      return s.value;
+    case 'Cons':
+      return `(${s.car} ${s.cdr.map(StoString).join(' ')})`;
   }
 }
 
@@ -73,7 +66,7 @@ function expr(input: string): S {
   return exprBp(lexer, 0);
 }
 
-function infixBindingPower(op: string): [number, number] {
+function infixBindingPower(op: string): [number, number] | undefined {
   switch (op) {
     case '+':
     case '-':
@@ -81,39 +74,85 @@ function infixBindingPower(op: string): [number, number] {
     case '*':
     case '/':
       return [3, 4];
+    case '.':
+      return [8, 7];
+    default:
+      return undefined;
+  }
+}
+
+function prefixBindingPower(op: string): [undefined, number] {
+  switch (op) {
+    case '+':
+    case '-':
+      return [undefined, 5];
     default:
       throw new Error(`Bad op: ${op}`);
   }
 }
 
-// exprBp
-//    = Atom
-//    | exprBp op exprBp
+function postfixBindingPower(op: string): [number, undefined] | undefined {
+  switch (op) {
+    case '!':
+      return [7, undefined];
+    default:
+      return undefined;
+  }
+}
+
 function exprBp(lexer: Lexer, minBp: number): S {
   const next = lexer.next();
   let lhs: S;
-  if (next.kind === 'Atom') {
-    lhs = new S(next);
-  } else {
-    throw new Error(`Unexpected ${next.kind} token`);
+  switch (next.kind) {
+    case 'Atom':
+      lhs = next;
+      break;
+    case 'Op': {
+      const [, rightBp] = prefixBindingPower(next.value);
+      lhs = {
+        kind: 'Cons',
+        car: next.value,
+        cdr: [exprBp(lexer, rightBp)],
+      };
+      break;
+    }
+    default:
+      throw new Error(`Unexpected ${next.kind} token`);
   }
   let doesContinue = true;
   while (doesContinue) {
     const op = lexer.peek();
     switch (op.kind) {
       case 'Op': {
-        const [leftBp, rightBp] = infixBindingPower(op.value);
+        const bp = postfixBindingPower(op.value);
+        if (bp === undefined) {
+          const bp = infixBindingPower(op.value);
+          if (bp === undefined) throw new Error(`Bad op ${op.value}`);
+          const [leftBp, rightBp] = bp;
+          if (leftBp < minBp) {
+            doesContinue = false;
+            break;
+          }
+          lexer.next();
+          const rhs = exprBp(lexer, rightBp);
+          lhs = {
+            kind: 'Cons',
+            car: op.value,
+            cdr: [lhs, rhs],
+          };
+          continue;
+        }
+        const [leftBp] = bp;
         if (leftBp < minBp) {
           doesContinue = false;
           break;
         }
         lexer.next();
-        const rhs = exprBp(lexer, rightBp);
-        lhs = new S({
+        lhs = {
           kind: 'Cons',
           car: op.value,
-          cdr: [lhs, rhs],
-        });
+          cdr: [lhs],
+        };
         break;
       }
       case 'Eof': {
@@ -128,4 +167,4 @@ function exprBp(lexer: Lexer, minBp: number): S {
   return lhs;
 }
 
-export { Lexer, expr };
+export { Lexer, expr, StoString };
