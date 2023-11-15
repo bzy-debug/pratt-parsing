@@ -68,14 +68,18 @@ function expr(input: string): S {
 
 function infixBindingPower(op: string): [number, number] | undefined {
   switch (op) {
+    case '=':
+      return [2, 1];
+    case '?':
+      return [4, 3];
     case '+':
     case '-':
-      return [1, 2];
+      return [5, 6];
     case '*':
     case '/':
-      return [3, 4];
+      return [7, 8];
     case '.':
-      return [8, 7];
+      return [14, 13];
     default:
       return undefined;
   }
@@ -85,7 +89,7 @@ function prefixBindingPower(op: string): [undefined, number] {
   switch (op) {
     case '+':
     case '-':
-      return [undefined, 5];
+      return [undefined, 9];
     default:
       throw new Error(`Bad op: ${op}`);
   }
@@ -94,30 +98,40 @@ function prefixBindingPower(op: string): [undefined, number] {
 function postfixBindingPower(op: string): [number, undefined] | undefined {
   switch (op) {
     case '!':
-      return [7, undefined];
+    case '[':
+      return [11, undefined];
     default:
       return undefined;
   }
 }
 
 function exprBp(lexer: Lexer, minBp: number): S {
-  const next = lexer.next();
+  const token = lexer.next();
   let lhs: S;
-  switch (next.kind) {
+  switch (token.kind) {
     case 'Atom':
-      lhs = next;
+      lhs = token;
       break;
     case 'Op': {
-      const [, rightBp] = prefixBindingPower(next.value);
+      if (token.value === '(') {
+        const expr = exprBp(lexer, 0);
+        const next = lexer.next();
+        if (next.kind !== 'Op' || next.value !== ')') {
+          throw new Error(`Unexpected ${next.kind} token`);
+        }
+        lhs = expr;
+        break;
+      }
+      const [, rightBp] = prefixBindingPower(token.value);
       lhs = {
         kind: 'Cons',
-        car: next.value,
+        car: token.value,
         cdr: [exprBp(lexer, rightBp)],
       };
       break;
     }
     default:
-      throw new Error(`Unexpected ${next.kind} token`);
+      throw new Error(`Unexpected ${token.kind} token`);
   }
   let doesContinue = true;
   while (doesContinue) {
@@ -127,13 +141,30 @@ function exprBp(lexer: Lexer, minBp: number): S {
         const bp = postfixBindingPower(op.value);
         if (bp === undefined) {
           const bp = infixBindingPower(op.value);
-          if (bp === undefined) throw new Error(`Bad op ${op.value}`);
+          if (bp === undefined) {
+            doesContinue = false;
+            break;
+          }
           const [leftBp, rightBp] = bp;
           if (leftBp < minBp) {
             doesContinue = false;
             break;
           }
           lexer.next();
+          if (op.value === '?') {
+            const mhs = exprBp(lexer, 0);
+            const next = lexer.next();
+            if (next.kind !== 'Op' || next.value !== ':') {
+              throw new Error(`Unexpected ${next.kind} Token`);
+            }
+            const rhs = exprBp(lexer, rightBp);
+            lhs = {
+              kind: 'Cons',
+              car: '?:',
+              cdr: [lhs, mhs, rhs],
+            };
+            continue;
+          }
           const rhs = exprBp(lexer, rightBp);
           lhs = {
             kind: 'Cons',
@@ -148,6 +179,19 @@ function exprBp(lexer: Lexer, minBp: number): S {
           break;
         }
         lexer.next();
+        if (op.value === '[') {
+          const index = exprBp(lexer, 0);
+          const next = lexer.next();
+          if (next.kind !== 'Op' || next.value !== ']') {
+            throw new Error(`Unexpected ${next.kind} Token`);
+          }
+          lhs = {
+            kind: 'Cons',
+            car: '[]',
+            cdr: [lhs, index],
+          };
+          break;
+        }
         lhs = {
           kind: 'Cons',
           car: op.value,
