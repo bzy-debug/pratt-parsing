@@ -68,6 +68,7 @@ fn infix_bp(op: char) -> (u32, u32) {
     match op {
         '+' | '-' => (1, 2),
         '*' | '/' => (3, 4),
+        '.' => (8, 7),
         _ => panic!("unexpected op {}", op),
     }
 }
@@ -131,5 +132,10 @@ mod test {
     #[test]
     fn test_mul_plus() {
         check(expr("1 * 2 + 3"), expect!["(+ (* 1 2) 3)"])
+    }
+
+    #[test]
+    fn test_fn_compose() {
+        check(expr("f . g . h"), expect!["(. f (. g h))"])
     }
 }
