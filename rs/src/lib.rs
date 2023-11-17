@@ -84,6 +84,7 @@ fn infix_bp(op: char) -> (u32, u32) {
 
 fn postfix_bp(op: char) -> Option<(u32, ())> {
     match op {
+        '[' => Some((6, ())),
         '!' => Some((6, ())),
         _ => None,
     }
@@ -116,7 +117,7 @@ fn expr_bp(lexer: &mut Lexer, min_bp: u32) -> S {
             t => panic!("unexpected token {:?}", t),
         };
 
-        if op == ')' {
+        if op == ')' || op == ']' {
             break;
         }
 
@@ -125,7 +126,13 @@ fn expr_bp(lexer: &mut Lexer, min_bp: u32) -> S {
                 break;
             }
             lexer.next();
-            lhs = S::Cons(op, vec![lhs]);
+            if op == '[' {
+                let index_expr = expr_bp(lexer, 0);
+                assert_eq!(lexer.next(), Token::Op(']'));
+                lhs = S::Cons(op, vec![lhs, index_expr]);
+            } else {
+                lhs = S::Cons(op, vec![lhs]);
+            }
             continue;
         }
         let (l_bp, r_bp) = infix_bp(op);
@@ -205,5 +212,15 @@ mod test {
     #[test]
     fn test_paren_postfix() {
         check(expr("(- 1)!"), expect!["(! (- 1))"])
+    }
+
+    #[test]
+    fn test_bracket() {
+        check(expr("a[1]"), expect!["([ a 1)"])
+    }
+
+    #[test]
+    fn test_bracket_complex() {
+        check(expr("-a[(1 + 2) * 3]!"), expect!["(- (! ([ a (* (+ 1 2) 3))))"])
     }
 }
