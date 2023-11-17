@@ -64,6 +64,13 @@ impl ToString for S {
     }
 }
 
+fn prefix_bp(op: char) -> ((), u32) {
+    match op {
+        '+' | '-' => ((), 5),
+        _ => panic!("unexpected op {}", op),
+    }
+}
+
 fn infix_bp(op: char) -> (u32, u32) {
     match op {
         '+' | '-' => (1, 2),
@@ -81,6 +88,10 @@ pub fn expr(input: &str) -> S {
 fn expr_bp(lexer: &mut Lexer, min_bp: u32) -> S {
     let mut lhs = match lexer.next() {
         Token::Atom(c) => S::Atom(c),
+        Token::Op(op) => {
+            let ((), r_bp) = prefix_bp(op);
+            S::Cons(op, vec![expr_bp(lexer, r_bp)])
+        }
         t => panic!("unexpected token {:?}", t),
     };
 
@@ -137,5 +148,15 @@ mod test {
     #[test]
     fn test_fn_compose() {
         check(expr("f . g . h"), expect!["(. f (. g h))"])
+    }
+
+    #[test]
+    fn test_prefix() {
+        check(expr("- - 3 + 2 * 7"), expect!["(+ (- (- 3)) (* 2 7))"])
+    }
+
+    #[test]
+    fn test_prefix_compose() {
+        check(expr("- f . g . h"), expect!["(- (. f (. g h)))"])
     }
 }
