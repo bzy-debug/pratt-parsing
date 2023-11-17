@@ -78,6 +78,7 @@ fn infix_bp(op: char) -> (u32, u32) {
         '+' | '-' => (1, 2),
         '*' | '/' => (3, 4),
         '.' => (8, 7),
+        '?' => (10, 9),
         _ => panic!("unexpected op {}", op),
     }
 }
@@ -117,7 +118,7 @@ fn expr_bp(lexer: &mut Lexer, min_bp: u32) -> S {
             t => panic!("unexpected token {:?}", t),
         };
 
-        if op == ')' || op == ']' {
+        if op == ')' || op == ']' || op == ':' {
             break;
         }
 
@@ -140,8 +141,15 @@ fn expr_bp(lexer: &mut Lexer, min_bp: u32) -> S {
             break;
         }
         lexer.next();
-        let rhs = expr_bp(lexer, r_bp);
-        lhs = S::Cons(op, vec![lhs, rhs]);
+        if op == '?' {
+            let mhs = expr_bp(lexer, 0);
+            assert_eq!(lexer.next(), Token::Op(':'));
+            let rhs = expr_bp(lexer, r_bp);
+            lhs = S::Cons(op, vec![lhs, mhs, rhs]);
+        } else {
+            let rhs = expr_bp(lexer, r_bp);
+            lhs = S::Cons(op, vec![lhs, rhs]);
+        }
     }
 
     lhs
@@ -221,6 +229,19 @@ mod test {
 
     #[test]
     fn test_bracket_complex() {
-        check(expr("-a[(1 + 2) * 3]!"), expect!["(- (! ([ a (* (+ 1 2) 3))))"])
+        check(
+            expr("-a[(1 + 2) * 3]!"),
+            expect!["(- (! ([ a (* (+ 1 2) 3))))"],
+        )
+    }
+
+    #[test]
+    fn test_ternary() {
+        check(expr("a ? b : c ? d : e"), expect!["(? a b (? c d e))"])
+    }
+
+    #[test]
+    fn test_ternary_complex() {
+        check(expr("1 + a ? b ! : c + d"), expect!["(+ (+ 1 (? a (! b) c)) d)"])
     }
 }
