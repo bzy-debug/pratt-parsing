@@ -4,7 +4,7 @@ pub fn answer() -> u32 {
     42
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Token {
     Atom(char),
     Op(char),
@@ -97,6 +97,11 @@ pub fn expr(input: &str) -> S {
 fn expr_bp(lexer: &mut Lexer, min_bp: u32) -> S {
     let mut lhs = match lexer.next() {
         Token::Atom(c) => S::Atom(c),
+        Token::Op('(') => {
+            let expr = expr_bp(lexer, 0);
+            assert_eq!(lexer.next(), Token::Op(')'));
+            expr
+        }
         Token::Op(op) => {
             let ((), r_bp) = prefix_bp(op);
             S::Cons(op, vec![expr_bp(lexer, r_bp)])
@@ -110,6 +115,10 @@ fn expr_bp(lexer: &mut Lexer, min_bp: u32) -> S {
             Token::Eof => break,
             t => panic!("unexpected token {:?}", t),
         };
+
+        if op == ')' {
+            break;
+        }
 
         if let Some((l_bp, ())) = postfix_bp(op) {
             if l_bp < min_bp {
@@ -186,5 +195,15 @@ mod test {
     #[test]
     fn test_postfix_infix() {
         check(expr("- 1 ! ! * 3 !"), expect!["(* (- (! (! 1))) (! 3))"])
+    }
+
+    #[test]
+    fn test_paren() {
+        check(expr("(1 + 2) * (3 + 4)"), expect!["(* (+ 1 2) (+ 3 4))"])
+    }
+
+    #[test]
+    fn test_paren_postfix() {
+        check(expr("(- 1)!"), expect!["(! (- 1))"])
     }
 }
