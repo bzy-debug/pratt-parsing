@@ -73,13 +73,13 @@ fn prefix_bp(op: char) -> ((), u32) {
     }
 }
 
-fn infix_bp(op: char) -> (u32, u32) {
+fn infix_bp(op: char) -> Option<(u32, u32)> {
     match op {
-        '+' | '-' => (1, 2),
-        '*' | '/' => (3, 4),
-        '.' => (8, 7),
-        '?' => (10, 9),
-        _ => panic!("unexpected op {}", op),
+        '+' | '-' => Some((1, 2)),
+        '*' | '/' => Some((3, 4)),
+        '.' => Some((8, 7)),
+        '?' => Some((10, 9)),
+        _ => None,
     }
 }
 
@@ -118,10 +118,6 @@ fn expr_bp(lexer: &mut Lexer, min_bp: u32) -> S {
             t => panic!("unexpected token {:?}", t),
         };
 
-        if op == ')' || op == ']' || op == ':' {
-            break;
-        }
-
         if let Some((l_bp, ())) = postfix_bp(op) {
             if l_bp < min_bp {
                 break;
@@ -136,20 +132,23 @@ fn expr_bp(lexer: &mut Lexer, min_bp: u32) -> S {
             }
             continue;
         }
-        let (l_bp, r_bp) = infix_bp(op);
-        if l_bp < min_bp {
-            break;
+        if let Some((l_bp, r_bp)) = infix_bp(op) {
+            if l_bp < min_bp {
+                break;
+            }
+            lexer.next();
+            if op == '?' {
+                let mhs = expr_bp(lexer, 0);
+                assert_eq!(lexer.next(), Token::Op(':'));
+                let rhs = expr_bp(lexer, r_bp);
+                lhs = S::Cons(op, vec![lhs, mhs, rhs]);
+            } else {
+                let rhs = expr_bp(lexer, r_bp);
+                lhs = S::Cons(op, vec![lhs, rhs]);
+            }
+            continue;
         }
-        lexer.next();
-        if op == '?' {
-            let mhs = expr_bp(lexer, 0);
-            assert_eq!(lexer.next(), Token::Op(':'));
-            let rhs = expr_bp(lexer, r_bp);
-            lhs = S::Cons(op, vec![lhs, mhs, rhs]);
-        } else {
-            let rhs = expr_bp(lexer, r_bp);
-            lhs = S::Cons(op, vec![lhs, rhs]);
-        }
+        break;
     }
 
     lhs
@@ -242,6 +241,9 @@ mod test {
 
     #[test]
     fn test_ternary_complex() {
-        check(expr("1 + a ? b ! : c + d"), expect!["(+ (+ 1 (? a (! b) c)) d)"])
+        check(
+            expr("1 + a ? b ! : c + d"),
+            expect!["(+ (+ 1 (? a (! b) c)) d)"],
+        )
     }
 }
