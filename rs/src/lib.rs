@@ -1,3 +1,5 @@
+use std::vec;
+
 pub fn answer() -> u32 {
     42
 }
@@ -80,6 +82,13 @@ fn infix_bp(op: char) -> (u32, u32) {
     }
 }
 
+fn postfix_bp(op: char) -> Option<(u32, ())> {
+    match op {
+        '!' => Some((6, ())),
+        _ => None,
+    }
+}
+
 pub fn expr(input: &str) -> S {
     let mut lexer = Lexer::new(input);
     expr_bp(&mut lexer, 0)
@@ -101,6 +110,15 @@ fn expr_bp(lexer: &mut Lexer, min_bp: u32) -> S {
             Token::Eof => break,
             t => panic!("unexpected token {:?}", t),
         };
+
+        if let Some((l_bp, ())) = postfix_bp(op) {
+            if l_bp < min_bp {
+                break;
+            }
+            lexer.next();
+            lhs = S::Cons(op, vec![lhs]);
+            continue;
+        }
         let (l_bp, r_bp) = infix_bp(op);
         if l_bp < min_bp {
             break;
@@ -158,5 +176,15 @@ mod test {
     #[test]
     fn test_prefix_compose() {
         check(expr("- f . g . h"), expect!["(- (. f (. g h)))"])
+    }
+
+    #[test]
+    fn test_postfix() {
+        check(expr("1 ! !"), expect!["(! (! 1))"])
+    }
+
+    #[test]
+    fn test_postfix_infix() {
+        check(expr("- 1 ! ! * 3 !"), expect!["(* (- (! (! 1))) (! 3))"])
     }
 }
